@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!--
+	Here might be dragons. Works on my machine.
+	I hacked this together to view three videos simultaneously, without having to manually synchronize them.
+	Mostly tested in Chrome on OS X.
+	
+	Author: Niklas Bergius (@bergius)
+	License: MIT, see end of markup.
+-->
+<html>
+<head>
+<title>Yx3</title>
+<style>
+    .mute.muted {
+        opacity: 0.5;
+    }
+    embed {
+        border: 1px solid transparent;
+    }
+    embed.in-sync {
+        border-color: #0f0;
+    }
+    embed.out-of-sync {
+        border-color: #f00;
+    }
+	#target-time {
+		width: 40px;
+	}
+	#videos {
+		margin-top: 16px;
+	}
+	body {
+		background-color: #888;
+		color: #fff;
+	}
+	body.loading * { cursor: wait; }
+	body.playing {}
+	body.paused {}
+	body.paused #sync {
+		opacity: 0.5;
+	}
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script src="yx3.js"></script>
+</head>
+<body>
+    <div id="info">
+		<span id="current">-</span> /
+		<span id="total">-</span>
+    </div>
+	<div id="ids">
+		<select id="set">
+			<option value="mJA4RzmhXc8,mJA4RzmhXc8,mJA4RzmhXc8">Synchronization Test</option>
+			<option value="GVzkJkCoIaA,hGcDcjvn1fo,lRnPBI28QQQ">Last Man Standing, Day 1</option>
+			<option value="HEoaou3JRqs,OtNLnYVSw7A,mJA4RzmhXc8">Last Man Standing, Day 2</option>
+		</select>
+		<input type="text" value="HEoaou3JRqs" title="Video 1"/>
+		<input type="text" value="OtNLnYVSw7A" title="Video 2"/>
+		<input type="text" value="mJA4RzmhXc8" title="Video 3"/>
+		<button id="cue-videos" type="button">Go</button>
+	</div>
+	<div id="buttons" style="display:none">
+		<button id="play" type="button">Play</button>
+		<button id="pause" type="button">Pause</button>
+		<button id="sync" type="button">Sync</button>
+		<!--
+		<button id="fwd">Forward 5</button>
+		<button id="rew">Back 5</button>
+		-->
+		<input id="target-time" value="0" title="Go to"/>
+		<button id="set-time">Go to</button>
+		<span id="mutes">
+			<button class="mute" type="button">Mute 1</button>
+			<button class="mute" type="button">Mute 2</button>
+			<button class="mute" type="button">Mute 3</button>
+		</span>
+		<input id="auto-mute" type="checkbox" checked autocomplete="off" title="Auto Mute While Synchronizing&#153;"/>
+	</div>
+	<div id="videos">
+		<embed allowscriptaccess="always" id="player1" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player1" type="application/x-shockwave-flash" width="640" height="390"/>
+		<embed allowscriptaccess="always" id="player2" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player2" type="application/x-shockwave-flash" width="640" height="390"/>
+		<embed allowscriptaccess="always" id="player3" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player3" type="application/x-shockwave-flash" width="640" height="390"/>
+	</div>
+</body>
+</html>
+<!--
+Copyright (C) 2011 by Niklas Bergius
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+-->
