@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Yx3</title>
+<style>
+    .mute.muted {
+        opacity: 0.5;
+    }
+    embed {
+        border: 1px solid transparent;
+    }
+    embed.in-sync {
+        border-color: #0f0;
+    }
+    embed.out-of-sync {
+        border-color: #f00;
+    }
+	.nudge span {
+		cursor: pointer;
+	}
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script>
+(function ($) {
+	var _,
+		players = {},
+		gui = {
+			ids: [],
+			play: _,
+			pause: _,
+			fwd5: _,
+			rew5: _,
+			current: _,
+			total: _,
+			targetTime: _,
+			setTime: _,
+			mutes: [],
+		},
+		currentTime = 0,
+		initialized = { count: 0 },
+		allowedDiff = 50, syncTargetPlayer,
+		nudgeMilliseconds = 167,
+		timeouts = { currentTime: null, attemptSync: null },
+		intervals = { currentTime: 100, attemptSync: 167 },
+		states = { unstarted: -1, ended: 0, playing: 1, paused: 2, buffering: 3, cued: 5 },
+		toState = (function () { var x = {}; $.each(states, function (key, value) { x[value] = key; }); return x; }()),
+		isPlaying = false,
+		maxDuration;
+
+	window.onYouTubePlayerReady = function (id) {
+		console.log('init', id);
+
+		var elem = $('#' + id),
+			idx = elem.index(),
+			video = gui.ids[idx].val(),
+			player = elem.get(0),
+			duration;
+			
+		player.cueVideoById(video);
+		player.playVideo();
+		player.pauseVideo();
+		player.seekTo(0);
+		
+		player.addEventListener('onStateChange', 'function (state) { onPlayerStateChange(' + idx + ', state); }');
+	};
+	
+	window.onPlayerStateChange = function (idx, state) {
+		console.log('state changed: player %s, state %s', idx, toState[state]);
+		
+		var duration, player = players[idx];
+		
+		if (state === states.paused && !initialized[idx]) {
+			duration = player.getDuration();
+			if (!maxDuration) maxDuration = duration;
+			else { maxDuration = Math.max(maxDuration, duration); }
+			initialized[idx] = true;
+			
+			initialized.count = initialized.count + 1;
+			if (initialized.count === 3) {
+				console.log('initialized');
+			    $('#buttons').show();
+				gui.current.text(currentTime);
+				gui.total.text(maxDuration);
+			}
+		}
+	};
+	
+	function mute(idx, manual) {
+		if (!manual && !gui.autoMute.prop('checked')) { return; }
+		
+	    players[idx].mute();
+        gui.mutes[idx].addClass('muted');
+	}
+
+	function unMute(idx, manual) {
+		if (!manual && !gui.autoMute.prop('checked')) { return; }
+
+	    players[idx].unMute();
+        gui.mutes[idx].removeClass('muted');
+	}
+	
+	function pollCurrentTime(requeue) {
+		var lowestTime;
+		$.each(players, function (_, player) {
+			var myTime = player.getCurrentTime();
+			if (!lowestTime) lowestTime = myTime;
+			else { lowestTime = Math.min(lowestTime, myTime); }
+		});
+		currentTime = lowestTime;
+		updateCurrentTimeGui();
+		
+		if (requeue) { queueCurrentTime(); }
+	}
+	
+	function updateCurrentTimeGui() {
+		gui.current.text(currentTime);
+	}
+	
+	function queueCurrentTime() {
+		stopCurrentTime();
+		timeouts.currentTime = setTimeout(pollCurrentTime, intervals.currentTime, true);
+	}
+	
+	function stopCurrentTime() {
+		clearTimeout(timeouts.currentTime);
+	}
+	
+	function beginAttemptSync() {
+		if (!isPlaying) { return; }
+		console.log('attempting sync');
+		
+		var times = [], lowest;
+		
+		// reset sync target
+		syncTargetPlayer = null;
+		
+	    $.each(players, function (_, player) {
+	        var time = player.getCurrentTime();
+			if (!lowest) lowest = time;
+	        else { lowest = Math.min(lowest, time); }
+	        times.push(time);
+	    });
+	
+	    $.each(times, function (idx, time) {
+	        var player = players[idx];
+	
+	        if (syncTargetPlayer === null && time === lowest) {
+	            // we're the target video
+	            unMute(idx);
+	            syncTargetPlayer = player;
+				console.log('sync target is %s', idx);
+				$(player)
+	                .removeClass('out-of-sync')
+	                .addClass('in-sync')
+					.addClass('sync-target');
+	        } else {
+	            mute(idx);
+				$(player).removeClass('sync-target');
+	        }
+		});
+		
+		attemptSync();
+	}
+	
+	function attemptSync() {
+	    var times = [], diffs = [], inSync = 0;
+	
+	    $.each(players, function (idx, player) {
+	        var player = players[idx];
+	
+			if (player === syncTargetPlayer) {
+				return;
+			}
+			        
+			var time = player.getCurrentTime(),
+				syncTargetTime = syncTargetPlayer.getCurrentTime(),
+	            diff = Math.abs(time - syncTargetTime);
+
+            if (diff > allowedDiff / 1000) {
+                // we need to be synced
+                player.seekTo(syncTargetPlayer.getCurrentTime());
+	            $(player)
+	                .addClass('out-of-sync')
+	                .removeClass('in-sync');
+            } else {
+				console.log('player %s is synced with %s seconds of lag (%s allowed)', idx, diff, (allowedDiff / 1000));
+	
+				inSync++;
+	            $(player)
+	                .removeClass('out-of-sync')
+	                .addClass('in-sync');
+            }
+
+			times.push(time);
+	        diffs.push(diff);
+	    });
+	
+		if (inSync < 2) {
+			queueAttemptSync();
+		}
+
+	    console.log(times, diffs);
+	}
+	
+	function queueAttemptSync() {
+		stopAttemptSync();
+		timeouts.attemptSync = setTimeout(attemptSync, intervals.attemptSync);
+	}
+	
+	function stopAttemptSync() {
+		clearTimeout(timeouts.attemptSync);
+	}
+	
+	function onPlay(e) {
+		e && e.preventDefault();
+		
+		console.log(players);
+		
+		$.each(players, function (key, player) {
+			console.log(key, player);
+			player.playVideo();
+		});
+		
+		isPlaying = true;
+		
+		//queueAttemptSync();
+		queueCurrentTime();
+	}
+	
+	function onPause(e) {
+		e && e.preventDefault();
+		stopCurrentTime();
+		stopAttemptSync();
+		
+		$.each(players, function (key, player) {
+			player.pauseVideo();
+		});
+
+		pollCurrentTime();
+	}
+	
+	function onSync(e) {
+		e.preventDefault();
+		beginAttemptSync();
+	}
+	
+	function onMute(e) {
+		var idx = $(this).index(),
+			player = players[idx];
+			
+		if (player.isMuted()) {
+			unMute(idx, true);
+		} else {
+			mute(idx, true);
+		}
+	}
+	
+	function onFwd(e) {}
+	
+	function onRew(e) {}
+	
+	function onSetTime(e) {
+		e && e.preventDefault();
+		
+		var targetTime = +gui.targetTime.val();
+		
+		stopCurrentTime();
+		
+		$.each(players, function (_, player) {
+			player.pauseVideo();
+			player.seekTo(targetTime);
+		});
+		
+		onPlay();
+	}
+	
+	function nudge(idx, plus) {
+		var player = players[idx],
+			current = player.getCurrentTime(),
+			nudgeTime = (plus ? nudgeMilliseconds : -nudgeMilliseconds) / 1000,
+			targetTime = current + nudgeTime;
+			
+		console.log('nudging %s by %s seconds', idx, nudgeTime);
+		
+		player.seekTo(targetTime);
+	}
+
+	$(function () {
+		var i, player, embeds;
+		
+	    gui.mutes = $('button.mute').map(function () { return $(this); });
+		gui.ids = $('#ids input').map(function () { return $(this); });
+		gui.play = $('#play');
+		gui.pause = $('#pause');
+		gui.sync = $('#sync');
+		gui.fwd = $('#fwd');
+		gui.rew = $('#rew');
+		gui.current = $('#current');
+		gui.total = $('#total');
+		gui.targetTime = $('#target-time');
+		gui.setTime = $('#set-time');
+		gui.autoMute = $('#auto-mute');
+			
+		$('button.mute').click(onMute);
+		gui.play.click(onPlay);
+		gui.pause.click(onPause);
+		gui.sync.click(onSync);
+		gui.fwd.click(onFwd);
+		gui.rew.click(onRew);
+		gui.setTime.click(onSetTime);
+		gui.targetTime.keydown(function (e) { e.which === 13 && (e.preventDefault(), onSetTime()); });
+		
+		$('.nudge').each(function () {
+			var id = this.id,
+				idx = +this.id.replace(/[^\d]/g, ''),
+				plus = $('.plus', this),
+				minus = $('.minus', this);
+			
+			plus.click(function () { nudge(idx, true); });
+			minus.click(function () { nudge(idx, false); });
+		});
+
+		embeds = $('embed');
+		for (i = 0; i < 3; i++) {
+			player = embeds.get(i);
+			players[i] = player;
+		}
+	});
+}(jQuery));
+</script>
+</head>
+<body>
+    <div id="info">
+		<span id="current"></span> /
+		<span id="total"></span>
+    </div>
+	<div id="ids">
+		<input type="text" value="HEoaou3JRqs"/>
+		<input type="text" value="OtNLnYVSw7A"/>
+		<input type="text" value="mJA4RzmhXc8"/>
+	</div>
+	<div id="buttons" style="display:none">
+		<button id="play" type="button">Play</button>
+		<button id="pause" type="button">Pause</button>
+		<button id="sync" type="button">Sync</button>
+		<button id="fwd">Forward 5</button>
+		<button id="rew">Back 5</button>
+		<input id="target-time" value="0"/>
+		<button id="set-time">Go to</button>
+		<span id="mutes">
+			<button class="mute" type="button">Mute 1</button>
+			<button class="mute" type="button">Mute 2</button>
+			<button class="mute" type="button">Mute 3</button>
+		</span>
+		<input id="auto-mute" type="checkbox" checked autocomplete="off"/>
+		<!--
+		<span id="nudge-0" class="nudge"><span class="minus">&#150;</span> 1 <span class="plus">+</span></span>
+		<span id="nudge-1" class="nudge"><span class="minus">&#150;</span> 2 <span class="plus">+</span></span>
+		<span id="nudge-2" class="nudge"><span class="minus">&#150;</span> 3 <span class="plus">+</span></span>
+		-->
+	</div>
+	<div id="videos">
+		<embed allowscriptaccess="always" id="player1" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player1" type="application/x-shockwave-flash" width="640" height="390"/>
+		<embed allowscriptaccess="always" id="player2" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player2" type="application/x-shockwave-flash" width="640" height="390"/>
+		<embed allowscriptaccess="always" id="player3" src="http://www.youtube.com/apiplayer?enablejsapi=1&amp;version=3&amp;playerapiid=player3" type="application/x-shockwave-flash" width="640" height="390"/>
+	</div>
+</body>
+</html>
