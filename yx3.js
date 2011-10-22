@@ -363,7 +363,7 @@
 		setValue = getSetFromQuery();
 		if (!!+setValue) {
 			gui.setSelect.find('option:eq(' + setValue + ')').prop('selected', true);
-		} else {
+		} else if (setValue) {
 			$('<option value="' + setValue + '">Incoming!</option>')
 				.appendTo(gui.setSelect)
 				.prop('selected', true);
